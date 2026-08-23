@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Echo</title>
+<style>
+  /* --- THE OBSIDIAN ENGINE --- */
+  :root { --accent: #00ffcc; --bg: #000000; }
+  html, body {
+    background-color: var(--bg) !important;
+    margin: 0; padding: 0; color: #ffffff;
+    font-family: 'Courier New', monospace;
+    min-height: 100vh; min-height: 100dvh; width: 100%;
+    overflow-x: hidden; overflow-y: auto;
+  }
+  * { box-sizing: border-box; }
+  .scanline {
+    width: 100%; height: 2px; background: rgba(0, 255, 204, 0.03);
+    position: fixed; top: 0; z-index: 9999; pointer-events: none;
+    animation: scan 8s linear infinite;
+  }
+  @keyframes scan { from { top: 0; } to { top: 100vh; } }
+  .nav-bar {
+    position: fixed; top: 0; width: 100%; padding: 30px;
+    display: flex; justify-content: space-between; align-items: center;
+    box-sizing: border-box; z-index: 100;
+  }
+  .nav-buttons { display: flex; gap: 10px; align-items: center; }
+  .iris-status { width: 10px; height: 10px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 15px var(--accent); display: inline-block; margin-right: 12px; }
+  .btn-primary { background: var(--accent); border: none; color: #000; padding: 14px 30px; font-weight: 900; cursor: pointer; letter-spacing: 2px; }
+  .btn-ghost {
+    background: transparent; border: 1px solid #333; color: #aaa;
+    padding: 10px 18px; font-family: inherit; font-size: 11px;
+    letter-spacing: 2px; cursor: pointer;
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .hero-section { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+  .logo { font-size: clamp(2.5rem, 12vw, 8rem); letter-spacing: clamp(10px, 4vw, 40px); margin: 0; text-indent: clamp(10px, 4vw, 40px); }
+  .improvement-grid { display: flex; gap: 20px; width: 100%; max-width: 1100px; margin-top: 60px; flex-wrap: wrap; }
+  .feature-box { flex: 1 1 220px; padding: 30px; border: 1px solid #1a1a1a; background: rgba(255,255,255,0.02); }
+  .hidden { display: none !important; }
+
+  /* --- player screen --- */
+  .active-player {
+    background: radial-gradient(circle at center, #0a0a0a 0%, #000 100%);
+    min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; flex-direction: column;
+    position: relative; padding: 20px; text-align: center;
+  }
+  .orb-wrap { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
+  .orb {
+    width: 120px; height: 120px; background: var(--accent); border-radius: 50%;
+    filter: blur(40px); opacity: 0.4;
+    transform: scale(1);
+    will-change: transform, filter, background;
+  }
+  .particle {
+    position: absolute; top: 50%; left: 50%; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--accent); pointer-events: none;
+    opacity: 0;
+  }
+  #song-title {
+    font-size: 2.5rem;
+    text-shadow: 0 0 20px var(--accent);
+    letter-spacing: 5px;
+    margin-top: 40px;
+    text-align: center;
+  }
+  #artist-name {
+    opacity: 0.5;
+    font-size: 1rem;
+    border-left: 2px solid var(--accent);
+    padding-left: 15px;
+    margin-top: 10px;
+  }
+  #status-line {
+    font-size: 11px; color: #444; letter-spacing: 2px; margin-top: 20px;
+  }
+  #reconnect-btn { margin-top: 10px; }
+
+  /* --- controls bar --- */
+  #controls-bar {
+    margin-top: 30px; display: flex; align-items: center; gap: 14px;
+    z-index: 10; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 480px;
+  }
+  .ctrl-btn {
+    background: transparent; border: 1px solid #333; color: #ccc;
+    width: 44px; height: 44px; font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #seek-bar { width: 260px; max-width: 60vw; accent-color: var(--accent); height: 30px; }
+  #volume-bar { width: 90px; accent-color: var(--accent); height: 30px; }
+  #time-label { font-size: 11px; color: #666; min-width: 90px; text-align: center; }
+
+  /* --- side panels --- */
+  .panel {
+    position: fixed; top: 0; right: 0; width: 340px; max-width: 100vw;
+    height: 100vh; height: 100dvh;
+    background: rgba(5,5,5,0.97); border-left: 1px solid #222;
+    z-index: 200; display: flex; flex-direction: column; box-sizing: border-box;
+  }
+  .panel-header {
+    padding: 20px; border-bottom: 1px solid #222; font-size: 12px;
+    letter-spacing: 3px; color: var(--accent); display: flex;
+    align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .close-btn {
+    background: none; border: none; color: #666; cursor: pointer; font-size: 14px;
+  }
+  .close-btn:hover { color: var(--accent); }
+  #playlist-list, #lyrics-lines {
+    overflow-y: auto; padding: 16px 20px; flex: 1;
+  }
+  .playlist-item {
+    padding: 10px 0; border-bottom: 1px solid #161616; cursor: pointer;
+    font-size: 13px; color: #ccc;
+  }
+  .playlist-item:hover { color: var(--accent); }
+  .lyric-line {
+    padding: 6px 0; font-size: 13px; color: #555; transition: color 0.2s;
+    line-height: 1.6;
+  }
+  .lyric-line.active { color: var(--accent); font-weight: bold; }
+  .lyric-translation { font-size: 11px; color: #444; margin-top: 2px; }
+  #translate-lang {
+    background: #111; color: #ccc; border: 1px solid #333; font-size: 11px;
+    font-family: inherit; padding: 4px;
+  }
+  .panel-msg { font-size: 12px; color: #555; padding: 10px 0; }
+
+  /* --- mobile / small screens --- */
+  @media (max-width: 640px) {
+    .nav-bar { padding: 16px; flex-wrap: wrap; gap: 10px; }
+    .nav-buttons { flex-wrap: wrap; gap: 8px; }
+    .btn-primary { padding: 10px 18px; font-size: 12px; }
+    .btn-ghost { padding: 8px 12px; font-size: 10px; }
+    .orb-wrap { width: 150px; height: 150px; }
+    .orb { width: 90px; height: 90px; }
+    #song-title { font-size: 1.6rem; letter-spacing: 3px; margin-top: 24px; }
+    #artist-name { font-size: 0.85rem; }
+    #seek-bar { max-width: 70vw; }
+    #volume-bar { width: 70px; }
+    .panel { width: 100vw; }
+  }
+
+  @media (hover: none) {
+    /* touch devices: hover-only affordances become always-visible */
+    .ctrl-btn, .btn-ghost, .playlist-item, .close-btn { color: #ccc; }
+  }
+</style>
+</head>
+<body>
+
+<div id="echo-root">
+  <div class="scanline"></div>
+  <nav class="nav-bar">
+    <div><div class="iris-status"></div><span style="font-size:10px; letter-spacing:3px; color:var(--accent);">ECHO OS // v.2.6</span></div>
+    <div class="nav-buttons">
+      <button id="playlists-toggle" class="btn-ghost hidden">PLAYLISTS</button>
+      <button id="lyrics-toggle" class="btn-ghost hidden">LYRICS</button>
+      <button id="login-button" class="btn-primary">CONNECT SPOTIFY</button>
+    </div>
+  </nav>
+
+  <section id="home-screen">
+    <div class="hero-section">
+      <h1 class="logo">ECHO</h1>
+      <p style="color:var(--accent); letter-spacing:12px; font-size:13px; margin-top:-10px; opacity:0.5;">THE SUPERIOR LISTENING LAYER</p>
+      <div class="improvement-grid">
+        <div class="feature-box"><h3>OBSIDIAN VOID</h3><p style="font-size:11px; color:#666;">Zero-latency interface designed for deep focus.</p></div>
+        <div class="feature-box"><h3>NEURAL PULSE</h3><p style="font-size:11px; color:#666;">Visuals driven by tempo and energy data.</p></div>
+        <div class="feature-box"><h3>VOID METRICS</h3><p style="font-size:11px; color:#666;">Tempo and energy sourced independently of Spotify's deprecated audio-features endpoint.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="os-interface" class="hidden active-player">
+    <div class="orb-wrap" id="orb-wrap">
+      <div class="orb" id="orb"></div>
+    </div>
+    <h2 id="song-title">SYSTEM ONLINE</h2>
+    <p id="artist-name"></p>
+
+    <div id="controls-bar">
+      <button id="prev-btn" class="ctrl-btn" title="Previous">|&lt;</button>
+      <button id="play-pause-btn" class="ctrl-btn" title="Play/Pause">&gt;||</button>
+      <button id="next-btn" class="ctrl-btn" title="Next">&gt;|</button>
+      <input type="range" id="seek-bar" min="0" max="1000" value="0">
+      <span id="time-label">0:00 / 0:00</span>
+      <input type="range" id="volume-bar" min="0" max="100" value="80" title="Volume">
+    </div>
+
+    <p id="status-line">awaiting playback...</p>
+    <button id="reconnect-btn" class="btn-ghost hidden">RECONNECT</button>
+  </section>
+
+  <div id="playlist-panel" class="panel hidden">
+    <div class="panel-header">
+      <span>PLAYLISTS</span>
+      <button id="close-playlists" class="close-btn">CLOSE</button>
+    </div>
+    <div id="playlist-list"><div class="panel-msg">loading...</div></div>
+  </div>
+
+  <div id="lyrics-panel" class="panel hidden">
+    <div class="panel-header">
+      <span>LYRICS</span>
+      <select id="translate-lang">
+        <option value="">Original</option>
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+        <option value="ja">Japanese</option>
+        <option value="pt">Portuguese</option>
+        <option value="ko">Korean</option>
+        <option value="it">Italian</option>
+      </select>
+      <button id="close-lyrics" class="close-btn">CLOSE</button>
+    </div>
+    <div id="lyrics-lines"><div class="panel-msg">no track loaded yet.</div></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CIRCUIT BREAKER
+   Runs first, on every load. If this window was opened as the
+   OAuth popup and Spotify has redirected back with a ?code=,
+   hand the code to the parent window and close.
+   ============================================================ */
+(function () {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const authError = params.get('error');
+
+    if ((code || authError) && window.opener) {
+        window.opener.postMessage(
+            { type: 'echo-spotify-auth', code: code, error: authError },
+            window.location.origin
+        );
+        document.documentElement.innerHTML =
+            '<body style="background:#000;color:#00ffcc;display:flex;align-items:center;justify-content:center;height:100vh;font-family:monospace;letter-spacing:3px;">LINK ESTABLISHED</body>';
+        window.stop();
+        setTimeout(() => window.close(), 600);
+    }
+})();
+
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const CLIENT_ID = '0406cb57e725478aa2a2feae0fdb7ec1';
+const REDIRECT_URI = window.location.origin + window.location.pathname;
+
+const TOKEN_KEY = 'echo_token';
+const TOKEN_EXPIRY_KEY = 'echo_token_expiry';
+const VERIFIER_KEY = 'echo_verifier';
+
+/* ============================================================
+   AUTH: PKCE login flow
+   ============================================================ */
+async function upgrade() {
+    const verifier = Array.from(crypto.getRandomValues(new Uint8Array(64)))
+        .map(x => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"[x % 62])
+        .join("");
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+    const challenge = btoa(String.fromCharCode(...new Uint8Array(hash)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+    window.localStorage.setItem(VERIFIER_KEY, verifier);
+
+    const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}` +
+        `&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+        `&code_challenge_method=S256&code_challenge=${challenge}` +
+        `&scope=streaming%20user-read-private%20user-read-email%20user-read-playback-state%20user-modify-playback-state%20user-read-currently-playing%20playlist-read-private%20playlist-read-collaborative` +
+        `&show_dialog=true`;
+
+    window.open(authUrl, 'SpotifyAuth', `width=500,height=700,top=${(screen.height-700)/2},left=${(screen.width-500)/2}`);
+}
+
+window.addEventListener('message', async (event) => {
+    if (event.origin !== window.location.origin) return;
+    if (event.data?.type !== 'echo-spotify-auth') return;
+
+    if (event.data.error) {
+        console.warn('Spotify auth denied or failed:', event.data.error);
+        setStatus('login was cancelled or denied.');
+        return;
+    }
+
+    const verifier = window.localStorage.getItem(VERIFIER_KEY);
+    if (!verifier) {
+        console.error('No PKCE verifier found in localStorage — cannot complete token exchange.');
+        return;
+    }
+
+    try {
+        const resp = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                client_id: CLIENT_ID,
+                grant_type: 'authorization_code',
+                code: event.data.code,
+                redirect_uri: REDIRECT_URI,
+                code_verifier: verifier
+            })
+        });
+
+        const data = await resp.json();
+
+        if (!resp.ok || !data.access_token) {
+            console.error('Token exchange failed:', data);
+            setStatus('login failed — check console for details.');
+            return;
+        }
+
+        storeToken(data.access_token, data.expires_in);
+        enterPlayer();
+    } catch (err) {
+        console.error('Network error during token exchange:', err);
+        setStatus('network error during login.');
+    }
+});
+
+function storeToken(token, expiresInSeconds) {
+    window.localStorage.setItem(TOKEN_KEY, token);
+    window.localStorage.setItem(TOKEN_EXPIRY_KEY, String(Date.now() + expiresInSeconds * 1000));
+}
+
+function getValidToken() {
+    const token = window.localStorage.getItem(TOKEN_KEY);
+    const expiry = Number(window.localStorage.getItem(TOKEN_EXPIRY_KEY) || 0);
+    if (!token || Date.now() >= expiry) return null;
+    return token;
+}
+
+function clearSession() {
+    window.localStorage.removeItem(TOKEN_KEY);
+    window.localStorage.removeItem(TOKEN_EXPIRY_KEY);
+}
+
+function setStatus(msg) {
+    const el = document.getElementById('status-line');
+    if (el) el.textContent = msg;
+}
+
+function showReconnect(show) {
+    const btn = document.getElementById('reconnect-btn');
+    if (btn) btn.classList.toggle('hidden', !show);
+}
+
+/* ============================================================
+   ENTER PLAYER SCREEN + LOAD SDK
+   ============================================================ */
+function enterPlayer() {
+    document.getElementById('home-screen').style.display = 'none';
+    const osInterface = document.getElementById('os-interface');
+    osInterface.classList.remove('hidden');
+    osInterface.style.display = 'flex';
+    document.getElementById('playlists-toggle').classList.remove('hidden');
+    document.getElementById('lyrics-toggle').classList.remove('hidden');
+    document.getElementById('login-button').textContent = 'CONNECTED';
+    showReconnect(false);
+    loadSpotifySDK();
+    fetchUserPlaylists();
+}
+
+function loadSpotifySDK() {
+    if (document.getElementById('spotify-sdk-script')) {
+        if (window.Spotify) initPlayer();
+        return;
+    }
+    const script = document.createElement('script');
+    script.id = 'spotify-sdk-script';
+    script.src = 'https://sdk.scdn.co/spotify-player.js';
+    document.body.appendChild(script);
+}
+
+window.onSpotifyWebPlaybackSDKReady = () => {
+    initPlayer();
+};
+
+let echoPlayer = null;
+let userIsSeeking = false;
+
+function initPlayer() {
+    const token = getValidToken();
+    if (!token) {
+        setStatus('session expired — please reconnect.');
+        showReconnect(true);
+        return;
+    }
+
+    echoPlayer = new Spotify.Player({
+        name: 'Echo',
+        getOAuthToken: cb => {
+            const t = getValidToken();
+            if (t) {
+                cb(t);
+            } else {
+                setStatus('session expired — please reconnect.');
+                showReconnect(true);
+            }
+        },
+        volume: 0.8
+    });
+
+    echoPlayer.addListener('ready', ({ device_id }) => {
+        console.log('Echo device ready:', device_id);
+        window.echoDeviceId = device_id;
+        setStatus('grabbing playback...');
+        transferPlaybackToEcho(device_id);
+    });
+
+    echoPlayer.addListener('not_ready', ({ device_id }) => {
+        console.log('Device went offline:', device_id);
+        setStatus('device offline.');
+    });
+
+    echoPlayer.addListener('initialization_error', ({ message }) => console.error('Init error:', message));
+    echoPlayer.addListener('authentication_error', ({ message }) => {
+        console.error('Auth error:', message);
+        setStatus('authentication failed — please reconnect.');
+        showReconnect(true);
+    });
+    echoPlayer.addListener('account_error', ({ message }) => {
+        console.error('Account error:', message);
+        setStatus('Spotify Premium is required for playback.');
+    });
+    echoPlayer.addListener('playback_error', ({ message }) => console.error('Playback error:', message));
+
+    echoPlayer.addListener('player_state_changed', (state) => {
+        if (!state) return;
+        const track = state.track_window.current_track;
+
+        document.getElementById('song-title').textContent = track.name;
+        const artistEl = document.getElementById('artist-name');
+        if (artistEl) artistEl.textContent = track.artists.map(a => a.name).join(', ');
+        setStatus(state.paused ? 'paused' : 'now playing');
+
+        document.getElementById('play-pause-btn').textContent = state.paused ? '>' : '||';
+
+        if (!userIsSeeking) {
+            updateSeekBar(state.position, state.duration);
+        }
+
+        window.echoCurrentTrack = {
+            id: track.id,
+            name: track.name,
+            artists: track.artists.map(a => a.name),
+            albumArt: track.album.images[0]?.url,
+            progressMs: state.position,
+            durationMs: state.duration,
+            isPaused: state.paused
+        };
+
+        handleTrackChanged(track, state, window.echoCurrentTrack);
+    });
+
+    echoPlayer.connect();
+}
+
+/* ============================================================
+   PLAYBACK CONTROLS
+   ============================================================ */
+// Moves Spotify Connect playback onto the Echo device the moment
+// it comes online, so whatever's already playing elsewhere picks
+// up here instead of requiring a manual device switch. If nothing
+// was playing anywhere, this is a no-op from the user's
+// perspective — Spotify just marks Echo as the active device.
+async function transferPlaybackToEcho(deviceId) {
+    const token = getValidToken();
+    if (!token) return;
+    try {
+        const resp = await fetch('https://api.spotify.com/v1/me/player', {
+            method: 'PUT',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ device_ids: [deviceId], play: true })
+        });
+        // Spotify returns 204 on success, or 404 if there was no
+        // active playback session anywhere to transfer.
+        if (resp.ok || resp.status === 204) {
+            setStatus('synced — playback transferred to Echo.');
+        } else if (resp.status === 404) {
+            setStatus('device ready — open Spotify and hit play to start.');
+        } else {
+            throw new Error(`Transfer failed: ${resp.status}`);
+        }
+    } catch (err) {
+        console.error('Playback transfer failed:', err);
+        setStatus('device ready — you may need to select Echo manually in Spotify Connect.');
+    }
+}
+
+function formatTime(ms) {
+    if (!Number.isFinite(ms) || ms < 0) ms = 0;
+    const totalSec = Math.floor(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return `${min}:${String(sec).padStart(2, '0')}`;
+}
+
+function updateSeekBar(positionMs, durationMs) {
+    const seekBar = document.getElementById('seek-bar');
+    const timeLabel = document.getElementById('time-label');
+    if (!seekBar || !durationMs) return;
+    seekBar.max = String(durationMs);
+    seekBar.value = String(positionMs);
+    if (timeLabel) timeLabel.textContent = `${formatTime(positionMs)} / ${formatTime(durationMs)}`;
+}
+
+document.getElementById('prev-btn').addEventListener('click', () => {
+    if (echoPlayer) echoPlayer.previousTrack().catch(err => console.error('previousTrack failed:', err));
+});
+document.getElementById('next-btn').addEventListener('click', () => {
+    if (echoPlayer) echoPlayer.nextTrack().catch(err => console.error('nextTrack failed:', err));
+});
+document.getElementById('play-pause-btn').addEventListener('click', () => {
+    if (echoPlayer) echoPlayer.togglePlay().catch(err => console.error('togglePlay failed:', err));
+});
+
+const seekBarEl = document.getElementById('seek-bar');
+seekBarEl.addEventListener('input', () => { userIsSeeking = true; });
+seekBarEl.addEventListener('change', () => {
+    if (echoPlayer) {
+        echoPlayer.seek(Number(seekBarEl.value)).catch(err => console.error('seek failed:', err));
+    }
+    userIsSeeking = false;
+});
+
+document.getElementById('volume-bar').addEventListener('input', (e) => {
+    if (echoPlayer) {
+        echoPlayer.setVolume(Number(e.target.value) / 100).catch(err => console.error('setVolume failed:', err));
+    }
+});
+
+document.getElementById('reconnect-btn').addEventListener('click', () => {
+    clearSession();
+    upgrade();
+});
+
+/* ============================================================
+   PLAYLISTS
+   Uses the standard Spotify Web API (not deprecated) to list
+   the user's playlists and start playback of one via the
+   Echo device registered by the Web Playback SDK.
+   ============================================================ */
+async function fetchUserPlaylists() {
+    const token = getValidToken();
+    const listEl = document.getElementById('playlist-list');
+    if (!token || !listEl) return;
+
+    try {
+        const resp = await fetch('https://api.spotify.com/v1/me/playlists?limit=30', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error(`Playlists request failed: ${resp.status}`);
+        const data = await resp.json();
+
+        listEl.innerHTML = '';
+        if (!data.items || data.items.length === 0) {
+            listEl.innerHTML = '<div class="panel-msg">no playlists found.</div>';
+            return;
+        }
+
+        data.items.forEach(playlist => {
+            const item = document.createElement('div');
+            item.className = 'playlist-item';
+            item.textContent = `${playlist.name} (${playlist.tracks.total})`;
+            item.onclick = () => playPlaylist(playlist.uri);
+            listEl.appendChild(item);
+        });
+    } catch (err) {
+        console.error('Failed to load playlists:', err);
+        listEl.innerHTML = '<div class="panel-msg">couldn\'t load playlists — check console.</div>';
+    }
+}
+
+async function playPlaylist(contextUri) {
+    const token = getValidToken();
+    if (!token || !window.echoDeviceId) {
+        setStatus('device not ready yet — wait a moment and try again.');
+        return;
+    }
+    try {
+        const resp = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${window.echoDeviceId}`, {
+            method: 'PUT',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ context_uri: contextUri })
+        });
+        if (!resp.ok && resp.status !== 204) {
+            throw new Error(`Play request failed: ${resp.status}`);
+        }
+    } catch (err) {
+        console.error('Failed to start playlist:', err);
+        setStatus('couldn\'t start that playlist — check console.');
+    }
+}
+
+document.getElementById('playlists-toggle').addEventListener('click', () => {
+    document.getElementById('lyrics-panel').classList.add('hidden');
+    document.getElementById('playlist-panel').classList.toggle('hidden');
+});
+document.getElementById('close-playlists').addEventListener('click', () => {
+    document.getElementById('playlist-panel').classList.add('hidden');
+});
+
+/* ============================================================
+   LYRICS + TRANSLATION
+   Lyrics come from LRCLIB (lrclib.net) — a free, open,
+   community-sourced synced-lyrics database with no API key
+   required. Translation uses MyMemory's free translation API.
+   Both are third-party services with their own uptime/coverage
+   limits — a missing result just shows "no lyrics found" rather
+   than breaking anything else in the app.
+   ============================================================ */
+const lyricsCache = new Map();
+const translationCache = new Map();
+let currentLyrics = { lines: [], synced: false };
+let lastRenderedLineIndex = -1;
+
+function parseLRC(lrcText) {
+    const timeTagRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/g;
+    const result = [];
+    for (const line of lrcText.split('\n')) {
+        const tags = [...line.matchAll(timeTagRegex)];
+        if (!tags.length) continue;
+        const text = line.replace(timeTagRegex, '').trim();
+        if (!text) continue;
+        for (const t of tags) {
+            const min = parseInt(t[1], 10);
+            const sec = parseInt(t[2], 10);
+            const frac = t[3] ? parseInt(t[3].padEnd(3, '0'), 10) : 0;
+            result.push({ ms: min * 60000 + sec * 1000 + frac, text });
+        }
+    }
+    result.sort((a, b) => a.ms - b.ms);
+    return result;
+}
+
+async function fetchLyrics(track) {
+    if (lyricsCache.has(track.id)) return lyricsCache.get(track.id);
+
+    const empty = { lines: [], synced: false };
+    try {
+        const params = new URLSearchParams({
+            artist_name: track.artists[0] || '',
+            track_name: track.name,
+            duration: String(Math.round((track.durationMs || 0) / 1000))
+        });
+        const resp = await fetch(`https://lrclib.net/api/get?${params.toString()}`);
+        if (!resp.ok) throw new Error(`LRCLIB responded ${resp.status}`);
+        const data = await resp.json();
+
+        let result;
+        if (data.syncedLyrics) {
+            result = { lines: parseLRC(data.syncedLyrics), synced: true };
+        } else if (data.plainLyrics) {
+            result = {
+                lines: data.plainLyrics.split('\n').filter(Boolean).map(text => ({ ms: null, text })),
+                synced: false
+            };
+        } else {
+            result = empty;
+        }
+
+        lyricsCache.set(track.id, result);
+        return result;
+    } catch (err) {
+        console.warn('Lyrics fetch failed:', err);
+        lyricsCache.set(track.id, empty);
+        return empty;
+    }
+}
+
+async function translateText(text, targetLang) {
+    if (!targetLang) return null;
+    const key = `${targetLang}:${text}`;
+    if (translationCache.has(key)) return translationCache.get(key);
+
+    try {
+        const resp = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetLang}`);
+        const data = await resp.json();
+        const translated = data?.responseData?.translatedText || null;
+        translationCache.set(key, translated);
+        return translated;
+    } catch (err) {
+        console.warn('Translation failed:', err);
+        return null;
+    }
+}
+
+function renderLyricsPanel() {
+    const container = document.getElementById('lyrics-lines');
+    if (!container) return;
+
+    if (!currentLyrics.lines.length) {
+        container.innerHTML = '<div class="panel-msg">no lyrics found for this track.</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+    currentLyrics.lines.forEach((line, i) => {
+        const div = document.createElement('div');
+        div.className = 'lyric-line';
+        div.dataset.index = String(i);
+        div.textContent = line.text;
+        container.appendChild(div);
+    });
+}
+
+// Only translates the handful of lines currently near the
+// playhead, on demand — not the whole song up front — since the
+// free translation API has a daily quota.
+async function translateVisibleLines(centerIndex, targetLang) {
+    if (!targetLang) return;
+    const container = document.getElementById('lyrics-lines');
+    if (!container) return;
+
+    const rangeStart = Math.max(0, centerIndex - 2);
+    const rangeEnd = Math.min(currentLyrics.lines.length - 1, centerIndex + 4);
+
+    for (let i = rangeStart; i <= rangeEnd; i++) {
+        const line = currentLyrics.lines[i];
+        const el = container.querySelector(`.lyric-line[data-index="${i}"]`);
+        if (!el || el.querySelector('.lyric-translation')) continue;
+
+        const translated = await translateText(line.text, targetLang);
+        if (translated && !el.querySelector('.lyric-translation')) {
+            const sub = document.createElement('div');
+            sub.className = 'lyric-translation';
+            sub.textContent = translated;
+            el.appendChild(sub);
+        }
+    }
+}
+
+document.getElementById('translate-lang').addEventListener('change', (e) => {
+    // Clear any previously injected translations so switching
+    // languages doesn't stack old ones underneath new ones.
+    document.querySelectorAll('.lyric-translation').forEach(el => el.remove());
+    if (e.target.value && lastRenderedLineIndex >= 0) {
+        translateVisibleLines(lastRenderedLineIndex, e.target.value);
+    }
+});
+
+document.getElementById('lyrics-toggle').addEventListener('click', () => {
+    document.getElementById('playlist-panel').classList.add('hidden');
+    document.getElementById('lyrics-panel').classList.toggle('hidden');
+});
+document.getElementById('close-lyrics').addEventListener('click', () => {
+    document.getElementById('lyrics-panel').classList.add('hidden');
+});
+
+/* ============================================================
+   BEAT-SYNC ENGINE
+   Fetches tempo/energy/valence for the current track from a
+   third-party audio analysis API (not Spotify — that endpoint is
+   deprecated for new apps), then drives the orb off a scheduled
+   beat clock rather than a live audio stream.
+   ============================================================ */
+
+// IMPORTANT: this is a placeholder contract, not a verified live
+// endpoint. Check whichever provider you actually sign up with
+// and adjust the URL/field names below to match their real docs.
+const AUDIO_API_BASE = 'https://api.reccobeats.com/v1'; // CHECK THIS against real docs
+
+const trackAnalysisCache = new Map();
+
+async function fetchTrackAnalysis(track) {
+    if (trackAnalysisCache.has(track.id)) {
+        return trackAnalysisCache.get(track.id);
+    }
+    const fallback = { tempo: 120, energy: 0.5, valence: 0.5 };
+    try {
+        const resp = await fetch(`${AUDIO_API_BASE}/track/${track.id}/audio-features`);
+        if (!resp.ok) throw new Error(`Audio API responded ${resp.status}`);
+        const data = await resp.json();
+        const analysis = {
+            tempo: Number(data.tempo) || fallback.tempo,
+            energy: clamp01(data.energy),
+            valence: clamp01(data.valence)
+        };
+        trackAnalysisCache.set(track.id, analysis);
+        return analysis;
+    } catch (err) {
+        console.warn('Falling back to default tempo/energy — audio API call failed:', err);
+        trackAnalysisCache.set(track.id, fallback);
+        return fallback;
+    }
+}
+
+function clamp01(n) {
+    n = Number(n);
+    if (Number.isNaN(n)) return 0.5;
+    return Math.max(0, Math.min(1, n));
+}
+
+class BeatClock {
+    constructor() {
+        this.bpm = 120;
+        this.originEpochMs = performance.now();
+        this.originPositionMs = 0;
+        this.running = false;
+        this.lastBeatIndex = -1;
+    }
+
+    sync(bpm, positionMs, isPaused) {
+        this.bpm = bpm > 0 ? bpm : 120;
+        this.originPositionMs = positionMs;
+        this.originEpochMs = performance.now();
+        this.running = !isPaused;
+    }
+
+    getPositionMs() {
+        let elapsed = this.originPositionMs;
+        if (this.running) elapsed += (performance.now() - this.originEpochMs);
+        return elapsed;
+    }
+
+    getPhase() {
+        const beatIntervalMs = 60000 / this.bpm;
+        const elapsedTrackMs = this.getPositionMs();
+        return (elapsedTrackMs % beatIntervalMs) / beatIntervalMs;
+    }
+
+    // Returns true once per beat onset (phase crossing zero) — used
+    // to trigger discrete effects like particle bursts.
+    consumeBeatOnset() {
+        const beatIntervalMs = 60000 / this.bpm;
+        const beatIndex = Math.floor(this.getPositionMs() / beatIntervalMs);
+        if (beatIndex !== this.lastBeatIndex) {
+            this.lastBeatIndex = beatIndex;
+            return true;
+        }
+        return false;
+    }
+}
+
+const beatClock = new BeatClock();
+let currentAnalysis = { tempo: 120, energy: 0.5, valence: 0.5 };
+let lastTrackId = null;
+
+async function handleTrackChanged(track, state, trackInfo) {
+    if (track.id !== lastTrackId) {
+        lastTrackId = track.id;
+        currentAnalysis = await fetchTrackAnalysis(track);
+
+        currentLyrics = await fetchLyrics(trackInfo);
+        lastRenderedLineIndex = -1;
+        renderLyricsPanel();
+    }
+    beatClock.sync(currentAnalysis.tempo, state.position, state.paused);
+}
+
+/* ============================================================
+   ORB RENDER LOOP
+   Runs continuously so the orb idles gently even before a track
+   loads. Also drives lyric-line highlighting and lazy
+   translation, since both need the same playback-position clock.
+   ============================================================ */
+function spawnParticleBurst(energy) {
+    const wrap = document.getElementById('orb-wrap');
+    if (!wrap) return;
+    const count = Math.round(4 + energy * 6);
+    for (let i = 0; i < count; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 60 + Math.random() * 50;
+        p.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+        p.style.setProperty('--dy', `${Math.sin(angle) * dist}px`);
+        p.style.transition = 'transform 0.7s ease-out, opacity 0.7s ease-out';
+        wrap.appendChild(p);
+        requestAnimationFrame(() => {
+            p.style.opacity = '0.8';
+            p.style.transform = `translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)))`;
+        });
+        setTimeout(() => {
+            p.style.opacity = '0';
+        }, 500);
+        setTimeout(() => p.remove(), 750);
+    }
+}
+
+function renderOrb() {
+    const orb = document.getElementById('orb');
+    if (orb) {
+        const phase = beatClock.getPhase();
+        const pulse = Math.pow(1 - phase, 3);
+        const energy = currentAnalysis.energy;
+        const valence = currentAnalysis.valence;
+
+        const scale = 1 + pulse * 0.35 * (0.4 + energy);
+        const blur = 40 - pulse * 15 * energy;
+        const hue = 160 - (valence - 0.5) * 80;
+
+        orb.style.transform = `scale(${scale.toFixed(3)})`;
+        orb.style.filter = `blur(${blur.toFixed(1)}px)`;
+        orb.style.background = `hsl(${hue.toFixed(0)}, 90%, 55%)`;
+        orb.style.opacity = String(0.35 + pulse * 0.25 * (0.5 + energy));
+
+        // Only burst particles on strong, energetic beats — keeps
+        // quiet songs visually calm instead of constantly sparking.
+        if (energy > 0.6 && beatClock.consumeBeatOnset()) {
+            spawnParticleBurst(energy);
+        }
+    }
+
+    // Lyric line highlighting, driven by the same playback clock.
+    if (currentLyrics.synced && currentLyrics.lines.length) {
+        const posMs = beatClock.getPositionMs();
+        let idx = -1;
+        for (let i = 0; i < currentLyrics.lines.length; i++) {
+            if (currentLyrics.lines[i].ms <= posMs) idx = i; else break;
+        }
+        if (idx !== lastRenderedLineIndex && idx >= 0) {
+            lastRenderedLineIndex = idx;
+            const container = document.getElementById('lyrics-lines');
+            if (container) {
+                container.querySelectorAll('.lyric-line.active').forEach(el => el.classList.remove('active'));
+                const activeEl = container.querySelector(`.lyric-line[data-index="${idx}"]`);
+                if (activeEl) {
+                    activeEl.classList.add('active');
+                    activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                }
+            }
+            const targetLang = document.getElementById('translate-lang').value;
+            if (targetLang) translateVisibleLines(idx, targetLang);
+        }
+    }
+
+    requestAnimationFrame(renderOrb);
+}
+requestAnimationFrame(renderOrb);
+
+/* ============================================================
+   INIT — resume an existing session on page load, if any
+   ============================================================ */
+document.getElementById('login-button').onclick = upgrade;
+
+window.addEventListener('DOMContentLoaded', () => {
+    if (getValidToken()) {
+        enterPlayer();
+    }
+});
+</script>
+
+</body>
+</html>
